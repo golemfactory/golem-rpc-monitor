@@ -1,9 +1,12 @@
+import argparse
 import json
 import os
 import time
 import requests
 from discord_manager import DiscordManager
 import logging
+from golem_rpc_endpoint_check import check_endpoint_health, CheckEndpointException
+from datetime import timedelta
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -17,58 +20,32 @@ webhook_token = os.getenv("DISCORD_WEBHOOK_TOKEN")
 if not webhook_token:
     raise Exception("environment variable DISCORD_WEBHOOK_TOKEN is needed to run monitor")
 
+parser = argparse.ArgumentParser(description='Golem rpc monitor params')
+parser.add_argument('--endpoint', dest="endpoint", type=str, help='Endpoint to check',
+                    default="https://gateway.golem.network/mumbai/instances")
+parser.add_argument('--check-interval', dest="check_interval", type=int,
+                    help='Check interval (in seconds)', default="10")
+parser.add_argument('--success-interval', dest="success_interval", type=int,
+                    help='Success message anti spam interval (in seconds)', default="60")
+parser.add_argument('--error-interval', dest="error_interval", type=int,
+                    help='Failure message anti spam interval (in seconds)', default="60")
+parser.set_defaults(dumpjournal=True)
+
+args = parser.parse_args()
+
 logger.info("Creating discord manager...")
 
-discord_manager = DiscordManager(webhook_id, webhook_token)
+discord_manager = DiscordManager(webhook_id, webhook_token,
+                                 min_resend_error_time=timedelta(seconds=args.error_interval),
+                                 min_resend_success_time=timedelta(seconds=args.success_interval))
 
 logger.info("Checking discord webhook...")
 
 discord_manager.check_webhook()
 
-
-
-class CheckEndpointException(Exception):
-    pass
-
-
-def check_endpoint_health(endpoint, expected_instances_count):
-    resp = requests.get(endpoint)
-    if resp.status_code != 200:
-        raise CheckEndpointException(f"Endpoint {endpoint} returned {resp.status_code}")
-    data = resp.json()
-
-    if len(data["instances"]) != expected_instances_count:
-        raise CheckEndpointException(f"Number of instances should be {expected_instances_count}")
-
-    health_status = {}
-    number_of_failed_instances = 0
-    for instance_id in data["instances"]:
-        instance = data["instances"][instance_id]
-        if "error" in instance["block_info"]:
-            number_of_failed_instances += 1
-            health_status[instance_id] = {
-                "error": instance["block_info"]["error"],
-            }
-            continue
-        if "timestamp" not in instance["block_info"]:
-            number_of_failed_instances += 1
-            continue
-
-        health_status[instance_id] = {
-            "timestamp": instance["block_info"]["timestamp"],
-            "number": instance["block_info"]["number"],
-        }
-        logger.info(f"Found {instance}")
-
-    if number_of_failed_instances >= expected_instances_count:
-        raise CheckEndpointException(f"Seems like all instances are failing")
-
-    return health_status
-
-
 while True:
     try:
-        endpoint = "https://gateway.golem.network/mumbai/instances"
+        endpoint = args.endpoint
 
         logger.info(f"Checking endpoint {endpoint}")
 
@@ -82,9 +59,9 @@ while True:
 
         if health_status:
             health_status_formatted = json.dumps(health_status, indent=4, default=str)
-            discord_manager.post_success_message("main", f"Successfully validated {endpoint} \n```{health_status_formatted}```")
+            discord_manager.post_success_message("main",
+                                                 f"Successfully validated {endpoint} \n```{health_status_formatted}```")
     except Exception as ex:
         logger.error(f"Discord manager exception: {ex}")
 
     time.sleep(10)
-
