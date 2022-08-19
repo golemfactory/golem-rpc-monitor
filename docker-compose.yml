@@ -1,0 +1,9 @@
+services:
+  monitor_mumbai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - mumbai_monitor_config.env
+    command: python monitor.py
+    
