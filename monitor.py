@@ -48,7 +48,9 @@ parser.add_argument('--error-interval', dest="error_interval", type=int,
 
 args = parser.parse_args()
 
-logger.info("Creating discord manager...")
+logger.info("Starting rpc monitor...")
+logger.debug(json.dumps(args.__dict__, indent=4))
+
 
 discord_manager = DiscordManager(webhook_url=webhook_url,
                                  min_resend_error_time=timedelta(seconds=args.error_interval),
