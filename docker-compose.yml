@@ -6,4 +6,13 @@ services:
     env_file:
       - mumbai_monitor_config.env
     command: python monitor.py
+    restart: unless-stopped
+  monitor_polygon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - polygon_monitor_config.env
+    command: python monitor.py
+    restart: unless-stopped
     
