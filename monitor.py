@@ -16,16 +16,35 @@ webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
 if not webhook_url:
     raise Exception("environment variable DISCORD_WEBHOOK_URL is needed to run monitor")
 
+
+# helper class from stack overflow to add env to argparse
+class EnvDefault(argparse.Action):
+    def __init__(self, envvar, required=True, default=None, **kwargs):
+        if not default and envvar:
+            if envvar in os.environ:
+                default = os.environ[envvar]
+        if required and default:
+            required = False
+        super(EnvDefault, self).__init__(default=default, required=required, **kwargs)
+
+    def __call__(self, parse, namespace, values, option_string=None):
+        setattr(namespace, self.dest, values)
+
+
 parser = argparse.ArgumentParser(description='Golem rpc monitor params')
-parser.add_argument('--endpoint', dest="endpoint", type=str, help='Endpoint to check',
+parser.add_argument('--endpoint', dest="endpoint", type=str,
+                    action=EnvDefault, envvar='MONITOR_ENDPOINT',
+                    help='Endpoint to check',
                     default="https://gateway.golem.network/mumbai/instances")
 parser.add_argument('--check-interval', dest="check_interval", type=int,
+                    action=EnvDefault, envvar='MONITOR_CHECK_INTERVAL',
                     help='Check interval (in seconds)', default="10")
 parser.add_argument('--success-interval', dest="success_interval", type=int,
+                    action=EnvDefault, envvar='MONITOR_SUCCESS_INTERVAL',
                     help='Success message anti spam interval (in seconds)', default="60")
 parser.add_argument('--error-interval', dest="error_interval", type=int,
+                    action=EnvDefault, envvar='MONITOR_ERROR_INTERVAL',
                     help='Failure message anti spam interval (in seconds)', default="60")
-parser.set_defaults(dumpjournal=True)
 
 args = parser.parse_args()
 
