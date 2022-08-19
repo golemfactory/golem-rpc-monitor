@@ -24,8 +24,11 @@ logger.info("Checking discord webhook...")
 
 discord_manager.check_webhook()
 
-discord_manager.post_message()
+
 while True:
+    discord_manager.post_success_message("main", "Message 1")
+    discord_manager.post_failure_message("main", "Message 2")
+    discord_manager.post_failure_message("main", "Message 3")
+    discord_manager.post_success_message("main", "Message 4")
     logger.info("Checking endpoint")
-    break
-    time.sleep(5)
+    time.sleep(4)
