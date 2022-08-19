@@ -8,14 +8,11 @@ logger.setLevel(logging.DEBUG)
 
 
 class DiscordManager:
-    def __init__(self, webhook_id, webhook_token,
+    def __init__(self, webhook_url,
                  min_resend_error_time=timedelta(seconds=30),
                  min_resend_success_time=timedelta(seconds=30)
                  ):
-        self._webhook_id = webhook_id
-        self._webhook_token = webhook_token
-        self._api_url = "https://discordapp.com/api/webhooks"
-        self._discord_url = f"{self._api_url}/{self._webhook_id}/{self._webhook_token}"
+        self._webhook_url = webhook_url
 
         self._last_send_success = {}
         self._last_send_failure = {}
@@ -23,14 +20,14 @@ class DiscordManager:
         self._min_resend_success_time = min_resend_success_time
 
     def check_webhook(self):
-        resp = requests.get(self._discord_url)
+        resp = requests.get(self._webhook_url)
 
         webhook_info = resp.json()
         logger.debug(f"Webhook info: {webhook_info}")
-        if webhook_info["id"] != self._webhook_id:
-            raise Exception("Webhook id check failed")
-        if webhook_info["token"] != self._webhook_token:
-            raise Exception("Webhook token check failed")
+        # if webhook_info["id"] != self._webhook_id:
+        #     raise Exception("Webhook id check failed")
+        # if webhook_info["token"] != self._webhook_token:
+        #     raise Exception("Webhook token check failed")
 
     # noinspection DuplicatedCode
     def post_failure_message(self, topic, message):
@@ -43,7 +40,7 @@ class DiscordManager:
                 return
 
         data = {"content": message}
-        response = requests.post(self._discord_url, json=data)
+        response = requests.post(self._webhook_url, json=data)
 
         self._last_send_failure[topic] = datetime.utcnow()
         if topic in self._last_send_success:
@@ -60,7 +57,7 @@ class DiscordManager:
                 return
 
         data = {"content": message}
-        response = requests.post(self._discord_url, json=data)
+        response = requests.post(self._webhook_url, json=data)
 
         self._last_send_success[topic] = datetime.utcnow()
         if topic in self._last_send_failure:

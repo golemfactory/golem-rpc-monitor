@@ -12,13 +12,9 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-webhook_id = os.getenv("DISCORD_WEBHOOK_ID")
-if not webhook_id:
-    raise Exception("environment variable DISCORD_WEBHOOK_ID is needed to run monitor")
-
-webhook_token = os.getenv("DISCORD_WEBHOOK_TOKEN")
-if not webhook_token:
-    raise Exception("environment variable DISCORD_WEBHOOK_TOKEN is needed to run monitor")
+webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
+if not webhook_url:
+    raise Exception("environment variable DISCORD_WEBHOOK_URL is needed to run monitor")
 
 parser = argparse.ArgumentParser(description='Golem rpc monitor params')
 parser.add_argument('--endpoint', dest="endpoint", type=str, help='Endpoint to check',
@@ -35,7 +31,7 @@ args = parser.parse_args()
 
 logger.info("Creating discord manager...")
 
-discord_manager = DiscordManager(webhook_id, webhook_token,
+discord_manager = DiscordManager(webhook_url=webhook_url,
                                  min_resend_error_time=timedelta(seconds=args.error_interval),
                                  min_resend_success_time=timedelta(seconds=args.success_interval))
 
