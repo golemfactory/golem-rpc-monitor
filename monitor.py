@@ -50,7 +50,7 @@ parser.add_argument('--token-holder', dest="token_holder", type=str, help='Token
                     default="0xc596aee002ebe98345ce3f967631aaf79cfbdf41")
 parser.add_argument('--request_burst', dest="request_burst", type=int, help='Number of requests to sent at once',
                     action=EnvDefault, envvar='BASELOAD_REQUEST_BURST',
-                    default=50)
+                    default=500)
 parser.add_argument('--sleep-time', dest="sleep_time", type=float, help='Number of requests to sent at once',
                     action=EnvDefault, envvar='BASELOAD_SLEEP_TIME',
                     default=5.0)
