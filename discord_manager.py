@@ -6,7 +6,7 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-
+# DiscordManager is responsible for sending messages to Discord webhook
 class DiscordManager:
     def __init__(self, webhook_url,
                  min_resend_error_time=timedelta(seconds=30),
