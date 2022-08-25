@@ -8,7 +8,7 @@ WORKDIR /monitor
 RUN pip install requests
 
 # run script + monitor
-COPY *.py .
+COPY *.py ./
 COPY README.md .
 
 
