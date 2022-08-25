@@ -21,6 +21,12 @@ if not webhook_url:
     raise Exception("environment variable DISCORD_WEBHOOK_URL is needed to run monitor")
 
 parser = argparse.ArgumentParser(description='Golem rpc monitor params')
+parser.add_argument('--work-mode', dest="work_mode", type=str,
+                    action=EnvDefault, envvar='MONITOR_WORK_MODE',
+                    help='Possible values: health_check, baseload_check',
+                    default="health_check")
+
+# arguments for work mode health_check
 parser.add_argument('--endpoint', dest="endpoint", type=str,
                     action=EnvDefault, envvar='MONITOR_ENDPOINT',
                     help='Endpoint to check',
@@ -34,11 +40,9 @@ parser.add_argument('--success-interval', dest="success_interval", type=int,
 parser.add_argument('--error-interval', dest="error_interval", type=int,
                     action=EnvDefault, envvar='MONITOR_ERROR_INTERVAL',
                     help='Failure message anti spam interval (in seconds)', default="60")
-parser.add_argument('--work-mode', dest="work_mode", type=str,
-                    action=EnvDefault, envvar='MONITOR_WORK_MODE',
-                    help='Possible values: health_check, baseload_check',
-                    default="health_check")
 
+# arguments for work mode baseload_check
+# noinspection DuplicatedCode
 parser.add_argument('--target-url', dest="target_url", type=str, help='Node url',
                     action=EnvDefault, envvar='BASELOAD_ENDPOINT',
                     default="http://54.38.192.207:8545")

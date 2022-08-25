@@ -7,6 +7,14 @@ services:
       - mumbai_monitor_config.env
     command: python monitor.py
     restart: unless-stopped
+  baseload_mumbai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - mumbai_baseload_config.env
+    command: python monitor.py
+    restart: unless-stopped
   monitor_polygon:
     build:
       context: .
@@ -15,4 +23,5 @@ services:
       - polygon_monitor_config.env
     command: python monitor.py
     restart: unless-stopped
+  
     
