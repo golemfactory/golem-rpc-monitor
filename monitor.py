@@ -16,15 +16,13 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
-if not webhook_url:
-    raise Exception("environment variable DISCORD_WEBHOOK_URL is needed to run monitor")
-
 parser = argparse.ArgumentParser(description='Golem rpc monitor params')
 parser.add_argument('--work-mode', dest="work_mode", type=str,
                     action=EnvDefault, envvar='MONITOR_WORK_MODE',
                     help='Possible values: health_check, baseload_check',
                     default="health_check")
+parser.add_argument('--no-discord', dest="no_discord", action='store_true')
+parser.set_defaults(no_discord=False)
 
 # arguments for work mode health_check
 parser.add_argument('--endpoint', dest="endpoint", type=str,
@@ -59,56 +57,73 @@ parser.add_argument('--sleep-time', dest="sleep_time", type=float, help='Number 
                     action=EnvDefault, envvar='BASELOAD_SLEEP_TIME',
                     default=5.0)
 
-
 args = parser.parse_args()
+
+if args.no_discord:
+    webhook_url = None
+else:
+    webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
+    if not webhook_url:
+        raise Exception("environment variable DISCORD_WEBHOOK_URL is needed to run monitor")
 
 logger.info("Starting rpc monitor...")
 logger.debug(json.dumps(args.__dict__, indent=4))
 
+if args.no_discord:
+    discord_manager = None
+    logger.info("Running without discord messaging...")
+else:
+    discord_manager = DiscordManager(webhook_url=webhook_url,
+                                     min_resend_error_time=timedelta(seconds=args.error_interval),
+                                     min_resend_success_time=timedelta(seconds=args.success_interval))
 
-discord_manager = DiscordManager(webhook_url=webhook_url,
-                                 min_resend_error_time=timedelta(seconds=args.error_interval),
-                                 min_resend_success_time=timedelta(seconds=args.success_interval))
+    logger.info("Checking discord webhook...")
+    discord_manager.check_webhook()
 
-logger.info("Checking discord webhook...")
 
-discord_manager.check_webhook()
+def post_failure_message(topic, message):
+    if discord_manager:
+        discord_manager.post_failure_message(topic, message)
+    else:
+        logger.error(message)
+
+
+def post_success_message(topic, message):
+    if discord_manager:
+        discord_manager.post_success_message(topic, message)
+    else:
+        logger.info(message)
+
 
 while True:
     try:
-
+        endpoint = args.endpoint
         if args.work_mode == "health_check":
-            endpoint = args.endpoint
             logger.info(f"Checking endpoint {endpoint}")
             health_status = None
             try:
                 health_status = check_endpoint_health(endpoint, 2)
             except CheckEndpointException as ex:
-                discord_manager.post_failure_message("main", f"Failure when validating {endpoint}\n{ex}")
+                post_failure_message("main", f"Failure when validating {endpoint}\n{ex}")
             except Exception as ex:
-                discord_manager.post_failure_message("main", f"Other exception when validating {endpoint}\n{ex}")
+                post_failure_message("main", f"Other exception when validating {endpoint}\n{ex}")
 
             if health_status:
                 health_status_formatted = json.dumps(health_status, indent=4, default=str)
-                discord_manager.post_success_message("main",
-                                                     f"Successfully validated {endpoint} \n```{health_status_formatted}```")
+                post_success_message("main",
+                                     f"Successfully validated {endpoint} \n```{health_status_formatted}```")
         elif args.work_mode == "baseload_check":
             target_url = args.target_url
             logger.info(f"Checking target url: {target_url}")
             try:
-                (number_of_success_req, number_of_failed_req) = burst_call(args.target_url, args.token_holder,
-                                                                           args.token_address, args.request_burst)
+                # burst_call returns success_request_count and failure_request_count
+                (s_r, f_r) = burst_call(args.target_url, args.token_holder, args.token_address, args.request_burst)
+                if s_r == 0 and f_r > 0:
+                    post_success_message("baseload", f"Successfully called {s_r} times")
+                else:
+                    post_failure_message("baseload", f"Failed to call {f_r} times")
             except Exception as ex:
-                discord_manager.post_failure_message("baseload",
-                                                     f"Other exception when calling burst call {endpoint}\n{ex}")
-
-            if number_of_failed_req == 0 and number_of_success_req > 0:
-                discord_manager.post_success_message("baseload",
-                                                     f"Successfully called {number_of_success_req} times")
-            else:
-                discord_manager.post_failure_message("baseload",
-                                                     f"Failed to call {number_of_failed_req} times")
-
+                post_failure_message("baseload", f"Other exception when calling burst call {endpoint}\n{ex}")
         else:
             raise Exception(f"Unknown work mode {args.work_mode}")
     except Exception as ex:
