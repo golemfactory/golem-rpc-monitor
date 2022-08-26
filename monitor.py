@@ -118,10 +118,10 @@ while True:
             try:
                 # burst_call returns success_request_count and failure_request_count
                 (s_r, f_r) = burst_call(args.target_url, args.token_holder, args.token_address, args.request_burst)
-                if s_r == 0 and f_r > 0:
-                    post_success_message("baseload", f"Successfully called {s_r} times")
-                else:
+                if s_r == 0 and f_r >= 0:
                     post_failure_message("baseload", f"Failed to call {f_r} times")
+                else:
+                    post_success_message("baseload", f"Successfully called {s_r} times")
             except Exception as ex:
                 post_failure_message("baseload", f"Other exception when calling burst call {endpoint}\n{ex}")
         else:
