@@ -19,7 +19,12 @@ def burst_call(target_url, token_holder, token_address, number_calls):
     number_of_success_req = 0
     number_of_failed_req = 0
     p = BatchRpcProvider(target_url, 20)
-    latest_block = p.get_latest_block()
+
+    try:
+        latest_block = p.get_latest_block()
+    except Exception as ex:
+        logger.error(f"Other error when getting request: {ex}")
+        raise ex
 
     token_address = token_address
 
@@ -39,8 +44,10 @@ def burst_call(target_url, token_holder, token_address, number_calls):
             success = True
         except BatchRpcException as ex:
             logger.error(f"BatchRpcException when getting request: {ex}")
+            raise ex
         except Exception as ex:
             logger.error(f"Other error when getting request: {ex}")
+            raise ex
 
         if success:
             number_of_success_req += 1

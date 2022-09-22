@@ -1,11 +1,22 @@
-import requests
 import time
 import json
 import logging
+import urllib.request
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+def send_post(url, data):
+    data_bytes = data.encode('utf-8')   # needs to be bytes
+
+    req = urllib.request.Request(url)
+    req.add_header('Content-Type', 'application/json')
+    req.add_header('Accept', 'application/json')
+    req.add_header('Content-Length', len(data_bytes))
+    response = urllib.request.urlopen(req, data_bytes)
+    return response
 
 
 def _erc20_get_balance_call(token_address, wallet, block):
@@ -41,7 +52,9 @@ class BatchRpcException(Exception):
 
 
 class BatchRpcProvider:
-    def __init__(self, endpoint, batch_size):
+    def __init__(self, endpoint, batch_size=1):
+        if batch_size <= 0:
+            raise Exception("Batch size must be greater than 0")
         self._endpoint = endpoint
         self._batch_size = batch_size
         self.number_of_batches_sent = 0
@@ -55,16 +68,14 @@ class BatchRpcProvider:
         }
 
         raw_json = json.dumps(call_data)
-        headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
         logger.debug(f"Request json size {len(raw_json)}")
-        start = time.time()
-        r = requests.post(self._endpoint, data=raw_json, headers=headers)
-        end = time.time()
+        r = send_post(self._endpoint, data=raw_json)
 
-        if r.status_code != 200:
+        if r.status != 200:
             raise BatchRpcException(f"Other error {r}")
 
-        rpc_resp = json.loads(r.content)
+        content = r.read()
+        rpc_resp = json.loads(content)
 
         if 'error' in rpc_resp:
             logger.error(f"Error during request number {call_data['id']}:")
@@ -94,6 +105,7 @@ class BatchRpcProvider:
         if len(call_data_array) == 0:
             return result_array
 
+
         batch_count = (len(call_data_array) - 1) // max_in_req + 1
         for batch_no in range(0, batch_count):
 
@@ -103,26 +115,27 @@ class BatchRpcProvider:
             logger.info(f"Requesting responses {start_idx} to {end_idx}")
 
             raw_json = json.dumps(call_data_array[start_idx:end_idx])
-            headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
             logger.debug(f"Request json size {len(raw_json)}")
             total_request_size += len(raw_json)
             start = time.time()
-            r = requests.post(self._endpoint, data=raw_json, headers=headers)
+            r = send_post(self._endpoint, data=raw_json)
+
             end = time.time()
             total_multi_call_time += end - start
             logger.debug(f"Request time {end - start:0.3f}s")
 
-            if r.status_code == 413:
+            if r.status == 413:
                 logger.error(
                     f"Data exceeded RPC limit, data size {len(raw_json)} try lowering batch size, current batch_count: f{batch_count}")
                 raise BatchRpcException("Data too big")
-            if r.status_code != 200:
+            if r.status != 200:
                 raise BatchRpcException(f"Other error {r}")
 
             total_response_size += len(raw_json)
-            logger.debug(f"Response json size {len(r.content)}")
+            content = r.read()
+            logger.debug(f"Response json size {len(content)}")
             self.number_of_batches_sent += 1
-            rpc_resp_array = json.loads(r.content)
+            rpc_resp_array = json.loads(content)
 
             for call_data in call_data_array[start_idx:end_idx]:
                 found_response = False
@@ -153,6 +166,72 @@ class BatchRpcProvider:
         resp = self._single_call(call_data_param)
         block_num = int(resp, 0)
         return block_num
+
+    def get_chain_id(self):
+        call_data_param = {
+            "method": "eth_chainId",
+            "params": []
+        }
+        resp = self._single_call(call_data_param)
+        chain_id = int(resp, 0)
+        return chain_id
+
+    def get_erc20_balance(self, holder, token_address, block_no='latest'):
+        call_data_params = []
+        call_params = _erc20_get_balance_call(token_address, holder, block_no)
+
+        resp = self._single_call(call_params)
+        return resp
+
+    def get_balance(self, wallet_address, block):
+        call_data_param = {
+            "method": "eth_getBalance",
+            "params": [wallet_address, block]
+        }
+        resp = self._single_call(call_data_param)
+        if resp == "0x":
+            raise Exception("Unknown value 0x")
+        balance = int(resp, 0)
+        return balance
+
+    def get_block_by_number(self, block, full_info):
+        if type(block) == int:
+            block = hex(block)
+        call_data_param = {
+            "method": "eth_getBlockByNumber",
+            "params": [block, full_info]
+        }
+        resp = self._single_call(call_data_param)
+        return resp
+
+    def get_blocks_by_range(self, block, number_of_blocks, full_info):
+
+        call_data_params = []
+        for i in range(0, number_of_blocks):
+            call_data_param = {
+                "method": "eth_getBlockByNumber",
+                "params": [hex(block + i), full_info]
+            }
+            call_data_params.append(call_data_param)
+
+        resp = self._multi_call(call_data_params, self._batch_size)
+        return resp
+
+    def get_transaction_by_hash(self, transaction_hash):
+        call_data_param = {
+            "method": "eth_getTransactionByHash",
+            "params": [transaction_hash]
+        }
+        resp = self._single_call(call_data_param)
+        return resp
+
+    def get_transaction_by_block_number_and_index(self, block_number, transaction_idx):
+        call_data_param = {
+            "method": "eth_getTransactionByBlockNumberAndIndex",
+            "params": [hex(block_number), hex(transaction_idx)]
+        }
+        resp = self._single_call(call_data_param)
+        return resp
 
     def get_erc20_balances(self, holders, token_address, block_no='latest'):
         call_data_params = []
