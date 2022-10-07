@@ -23,5 +23,12 @@ services:
       - polygon_monitor_config.env
     command: python monitor.py
     restart: unless-stopped
-  
+  baseload_polygon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - polygon_baseload_config.env
+    command: python monitor.py
+    restart: unless-stopped
     
