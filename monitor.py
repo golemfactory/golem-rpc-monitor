@@ -38,6 +38,9 @@ parser.add_argument('--success-interval', dest="success_interval", type=int,
 parser.add_argument('--error-interval', dest="error_interval", type=int,
                     action=EnvDefault, envvar='MONITOR_ERROR_INTERVAL',
                     help='Failure message anti spam interval (in seconds)', default="60")
+parser.add_argument('--expected-instances', dest="expected_instances", type=int,
+                    action=EnvDefault, envvar='EXPECTED_INSTANCES',
+                    help='How many instances are expected', default="2")
 
 # arguments for work mode baseload_check
 # noinspection DuplicatedCode
@@ -102,7 +105,7 @@ while True:
             logger.info(f"Checking endpoint {endpoint}")
             health_status = None
             try:
-                health_status = check_endpoint_health(endpoint, 2)
+                health_status = check_endpoint_health(endpoint, args.expected_instances)
             except CheckEndpointException as ex:
                 post_failure_message("main", f"Failure when validating {endpoint}\n{ex}")
             except Exception as ex:
