@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-
 batch_rpc_provider.logger.setLevel(logging.WARN)
 
 
@@ -37,8 +36,8 @@ def burst_call(target_url, token_holder, token_address, number_calls):
         max_steps -= 1
         success = False
         try:
-            resp = p.get_erc20_balances(single_holder_array, token_address, f"0x{current_block:x}")
-            balance = resp[0]
+            resp = p.get_erc20_balance(single_holder_array[0], token_address, f"0x{current_block:x}")
+            balance = resp
             b = int(balance, 16) / 10 ** 18
             logger.debug(f"{current_block} {b}")
             success = True
@@ -57,7 +56,7 @@ def burst_call(target_url, token_holder, token_address, number_calls):
     logger.info(f"Number of success requests: {number_of_success_req}")
     logger.info(f"Number of failed requests: {number_of_failed_req}")
 
-    return (number_of_success_req, number_of_failed_req)
+    return number_of_success_req, number_of_failed_req
 
 
 def baseload_loop(args_sleep_time, target_url, token_holder, token_address, number_calls):
