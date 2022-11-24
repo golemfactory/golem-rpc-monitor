@@ -31,4 +31,5 @@ services:
       - polygon_baseload_config.env
     command: python monitor.py
     restart: unless-stopped
-    
+    ports:
+        - "12001:8080"
