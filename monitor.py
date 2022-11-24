@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import json
 import os
 import time
@@ -53,7 +54,7 @@ parser.add_argument('--token-address', dest="token_address", type=str, help='Tok
 parser.add_argument('--token-holder', dest="token_holder", type=str, help='Token holder to check',
                     action=EnvDefault, envvar='BASELOAD_TOKEN_HOLDER',
                     default="0xc596aee002ebe98345ce3f967631aaf79cfbdf41")
-parser.add_argument('--request_burst', dest="request_burst", type=int, help='Number of requests to sent at once',
+parser.add_argument('--request-burst', dest="request_burst", type=int, help='Number of requests to sent at once',
                     action=EnvDefault, envvar='BASELOAD_REQUEST_BURST',
                     default=500)
 parser.add_argument('--sleep-time', dest="sleep_time", type=float, help='Number of requests to sent at once',
@@ -98,38 +99,42 @@ def post_success_message(topic, message):
         logger.info(message)
 
 
-while True:
-    try:
-        endpoint = args.endpoint
-        if args.work_mode == "health_check":
-            logger.info(f"Checking endpoint {endpoint}")
-            health_status = None
-            try:
-                health_status = check_endpoint_health(endpoint, args.expected_instances)
-            except CheckEndpointException as ex:
-                post_failure_message("main", f"Failure when validating {endpoint}\n{ex}")
-            except Exception as ex:
-                post_failure_message("main", f"Other exception when validating {endpoint}\n{ex}")
+async def amain():
+    while True:
+        try:
+            endpoint = args.endpoint
+            if args.work_mode == "health_check":
+                logger.info(f"Checking endpoint {endpoint}")
+                health_status = None
+                try:
+                    health_status = check_endpoint_health(endpoint, args.expected_instances)
+                except CheckEndpointException as ex:
+                    post_failure_message("main", f"Failure when validating {endpoint}\n{ex}")
+                except Exception as ex:
+                    post_failure_message("main", f"Other exception when validating {endpoint}\n{ex}")
 
-            if health_status:
-                health_status_formatted = json.dumps(health_status, indent=4, default=str)
-                post_success_message("main",
-                                     f"Successfully validated {endpoint} \n```{health_status_formatted}```")
-        elif args.work_mode == "baseload_check":
-            target_url = args.target_url
-            logger.info(f"Checking target url: {target_url}")
-            try:
-                # burst_call returns success_request_count and failure_request_count
-                (s_r, f_r) = burst_call(args.target_url, args.token_holder, args.token_address, args.request_burst)
-                if f_r == 0 and s_r > 0:
-                    post_success_message("baseload", f"Successfully called {s_r} times")
-                else:
-                    post_failure_message("baseload", f"Failed to call {f_r} times")
-            except Exception as ex:
-                post_failure_message("baseload", f"Other exception when calling burst call {endpoint}\n{ex}")
-        else:
-            raise Exception(f"Unknown work mode {args.work_mode}")
-    except Exception as ex:
-        logger.error(f"Discord manager exception: {ex}")
+                if health_status:
+                    health_status_formatted = json.dumps(health_status, indent=4, default=str)
+                    post_success_message("main",
+                                         f"Successfully validated {endpoint} \n```{health_status_formatted}```")
+            elif args.work_mode == "baseload_check":
+                target_url = args.target_url
+                logger.info(f"Checking target url: {target_url}")
+                try:
+                    # burst_call returns success_request_count and failure_request_count
+                    (s_r, f_r) = await burst_call(args.target_url, args.token_holder, args.token_address, args.request_burst)
+                    if f_r == 0 and s_r > 0:
+                        post_success_message("baseload", f"Successfully called {s_r} times")
+                    else:
+                        post_failure_message("baseload", f"Failed to call {f_r} times")
+                except Exception as ex:
+                    post_failure_message("baseload", f"Other exception when calling burst call {target_url}\n{ex}")
+            else:
+                raise Exception(f"Unknown work mode {args.work_mode}")
+        except Exception as ex:
+            logger.error(f"Discord manager exception: {ex}")
 
-    time.sleep(10)
+        time.sleep(10)
+
+if __name__ == '__main__':
+    asyncio.run(amain())

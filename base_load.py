@@ -11,16 +11,22 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-batch_rpc_provider.logger.setLevel(logging.WARN)
-
-
-def burst_call(target_url, token_holder, token_address, number_calls):
+async def burst_call(target_url, token_holder, token_address, number_calls):
     number_of_success_req = 0
     number_of_failed_req = 0
     p = BatchRpcProvider(target_url, 20)
 
     try:
-        latest_block = p.get_latest_block()
+        latest_block = await p.get_block_by_number("latest", False)
+        block_number = int(latest_block["number"], 0)
+        block_checked = block_number - 1000
+        block_ts = int(latest_block["timestamp"], 0)
+        current_ts = int(time.time())
+        old_s = current_ts - block_ts
+
+        logger.info(f"Latest block is {old_s}s old")
+
+        # logger.info(f"Latest block: {latest_block}")
     except Exception as ex:
         logger.error(f"Other error when getting request: {ex}")
         raise ex
@@ -29,17 +35,15 @@ def burst_call(target_url, token_holder, token_address, number_calls):
 
     single_holder_array = [token_holder]
 
-    current_block = latest_block
-
     max_steps = number_calls
     while max_steps > 0:
         max_steps -= 1
         success = False
         try:
-            resp = p.get_erc20_balance(single_holder_array[0], token_address, f"0x{current_block:x}")
+            resp = await p.get_erc20_balance(single_holder_array[0], token_address, f"0x{block_checked:x}")
             balance = resp
             b = int(balance, 16) / 10 ** 18
-            logger.debug(f"{current_block} {b}")
+            logger.info(f"Block checked: {block_checked} Amount: {b}")
             success = True
         except BatchRpcException as ex:
             logger.error(f"BatchRpcException when getting request: {ex}")
