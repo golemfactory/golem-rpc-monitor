@@ -9,6 +9,7 @@ import requests
 from aiohttp import web
 
 from base_load import burst_call
+from client_info import ClientInfo, RequestType
 from discord_manager import DiscordManager
 import logging
 
@@ -87,6 +88,7 @@ def post_success_message(discord_manager, topic, message):
 
 
 async def main_loop(discord_manager, args, context):
+    context['client_info'] = ClientInfo(1, "apikey")
     while True:
         try:
 
@@ -117,14 +119,17 @@ async def main_loop(discord_manager, args, context):
                     if f_r == 0 and s_r > 0:
                         context["last_success"] = datetime.now()
                         context["last_result"] = "success"
+                        context['client_info'].add_request("test", RequestType.Succeeded)
                         post_success_message(discord_manager, "baseload", f"Successfully called {s_r} times")
                     else:
                         context["last_result"] = "failure"
+                        context['client_info'].add_request("test", RequestType.Failed)
                         post_failure_message(discord_manager, "baseload", f"Failed to call {f_r} times")
                 except Exception as ex:
                     context["last_result"] = "error"
                     context["last_err"] = ex
                     context["last_err_time"] = datetime.now()
+                    context['client_info'].add_request("test", RequestType.Failed)
                     post_failure_message(discord_manager, "baseload",
                                          f"Other exception when calling burst call {target_url}\n{ex}")
                 context["last_call"] = datetime.now()
@@ -143,9 +148,42 @@ routes = web.RouteTableDef()
 async def hello(request):
     ctx = request.app['context']
 
+    def get_history(buckets, title):
+        hist = []
+        for key in reversed(buckets):
+            time1 = key
+            el = buckets[key]
+            if el.request_count > 0 and el.request_failed_count:
+                class_name = "warning"
+            elif el.request_failed_count > 0:
+                class_name = "error"
+            elif el.request_count > 0:
+                class_name = "success"
+            else:
+                class_name = "warning"
+
+
+            hist.append({
+                "time": time1,
+                "requests": el.request_count,
+                "failures": el.request_failed_count,
+                'class': class_name
+            })
+        return {
+            "hist": hist,
+            "title": title
+        }
+
+    hist_seconds = get_history(ctx['client_info'].time_buckets_seconds["test"], "Seconds")
+    hist_minutes = get_history(ctx['client_info'].time_buckets_minutes["test"], "Minutes")
+    hist_hours = get_history(ctx['client_info'].time_buckets_hours["test"], "Hours")
+    hist_days = get_history(ctx['client_info'].time_buckets_days["test"], "Days")
+
+
     ctx["current"] = {
         "block_age": int(time.time()) - ctx["block_timestamp"] if "block_timestamp" in ctx else 0,
         "call_age": int(time.time()) - int(ctx["last_call"].timestamp()),
+        "history": [hist_seconds, hist_minutes,hist_hours, hist_days],
     }
     response = aiohttp_jinja2.render_template('status.jinja2',
                                               request,

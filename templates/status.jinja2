@@ -15,6 +15,32 @@
         .error {
             color: red;
         }
+        tr.warning td {
+            background-color: yellow;
+            color: black;
+        }
+        tr.error td {
+            background-color: red;
+            color: white;
+        }
+        tr.success td {
+            background-color: green;
+            color: black;
+        }
+        table {
+            border-collapse: collapse;
+
+        }
+        th {
+            border: 1px solid black;
+            padding: 5px;
+        }
+        td {
+            padding: 5px;
+        }
+
+
+
 
     </style>
     <h2>Current Status {{title}}</h2>
@@ -26,5 +52,36 @@
     <p>Last error time: <span class="error">{{last_err_time}}</span></p>
     <p>Last error: <span class="error">{{last_err}}</span></p>
 
+
+    {% for hist in current.history  %}
+        <div style="float: left; margin: 10px;">
+            <h2>Last calls buckets ({{ hist.title }})</h2>
+            <div style="height: 200px; overflow-y: scroll;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Total checks</th>
+                        <th>Failed checks</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for el in hist.hist %}
+
+                    <tr class="{{ el.class }}">
+                        <td>{{el.time}}</td>
+                        <td>{{el.requests}}</td>
+                        {% if el.failures > 0 %}
+                        <td class="failure">{{el.failures}}</td>
+                        {% else %}
+                        <td >{{el.failures}}</td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+    {% endfor %}
 </body>
 </html>
