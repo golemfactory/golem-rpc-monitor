@@ -4,6 +4,7 @@ import json
 import os
 import time
 import requests
+from aiohttp import web
 
 from base_load import burst_call
 from discord_manager import DiscordManager
@@ -11,7 +12,10 @@ import logging
 
 from env_default import EnvDefault
 from golem_rpc_endpoint_check import check_endpoint_health, CheckEndpointException
-from datetime import timedelta
+from datetime import timedelta, datetime
+import aiohttp_jinja2
+import jinja2
+
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -22,6 +26,10 @@ parser.add_argument('--work-mode', dest="work_mode", type=str,
                     action=EnvDefault, envvar='MONITOR_WORK_MODE',
                     help='Possible values: health_check, baseload_check',
                     default="health_check")
+parser.add_argument('--title', dest="title", type=str,
+                    action=EnvDefault, envvar='MONITOR_TITLE',
+                    help='Title of the monitor',
+                    default="default_title")
 parser.add_argument('--no-discord', dest="no_discord", action='store_true')
 parser.set_defaults(no_discord=False)
 
@@ -61,45 +69,22 @@ parser.add_argument('--sleep-time', dest="sleep_time", type=float, help='Number 
                     action=EnvDefault, envvar='BASELOAD_SLEEP_TIME',
                     default=5.0)
 
-args = parser.parse_args()
 
-if args.no_discord:
-    webhook_url = None
-else:
-    webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
-    if not webhook_url:
-        raise Exception("environment variable DISCORD_WEBHOOK_URL is needed to run monitor")
-
-logger.info("Starting rpc monitor...")
-logger.debug(json.dumps(args.__dict__, indent=4))
-
-if args.no_discord:
-    discord_manager = None
-    logger.info("Running without discord messaging...")
-else:
-    discord_manager = DiscordManager(webhook_url=webhook_url,
-                                     min_resend_error_time=timedelta(seconds=args.error_interval),
-                                     min_resend_success_time=timedelta(seconds=args.success_interval))
-
-    logger.info("Checking discord webhook...")
-    discord_manager.check_webhook()
-
-
-def post_failure_message(topic, message):
+def post_failure_message(discord_manager, topic, message):
     if discord_manager:
         discord_manager.post_failure_message(topic, message)
     else:
         logger.error(message)
 
 
-def post_success_message(topic, message):
+def post_success_message(discord_manager, topic, message):
     if discord_manager:
         discord_manager.post_success_message(topic, message)
     else:
         logger.info(message)
 
 
-async def amain():
+async def main_loop(discord_manager, args, context):
     while True:
         try:
             endpoint = args.endpoint
@@ -109,9 +94,9 @@ async def amain():
                 try:
                     health_status = check_endpoint_health(endpoint, args.expected_instances)
                 except CheckEndpointException as ex:
-                    post_failure_message("main", f"Failure when validating {endpoint}\n{ex}")
+                    post_failure_message(discord_manager, "main", f"Failure when validating {endpoint}\n{ex}")
                 except Exception as ex:
-                    post_failure_message("main", f"Other exception when validating {endpoint}\n{ex}")
+                    post_failure_message(discord_manager, "main", f"Other exception when validating {endpoint}\n{ex}")
 
                 if health_status:
                     health_status_formatted = json.dumps(health_status, indent=4, default=str)
@@ -122,19 +107,83 @@ async def amain():
                 logger.info(f"Checking target url: {target_url}")
                 try:
                     # burst_call returns success_request_count and failure_request_count
-                    (s_r, f_r) = await burst_call(args.target_url, args.token_holder, args.token_address, args.request_burst)
+                    (s_r, f_r) = await burst_call(context, args.target_url, args.token_holder, args.token_address,
+                                                  args.request_burst)
                     if f_r == 0 and s_r > 0:
-                        post_success_message("baseload", f"Successfully called {s_r} times")
+                        context["last_success"] = datetime.now()
+                        context["last_result"] = "success"
+                        post_success_message(discord_manager, "baseload", f"Successfully called {s_r} times")
                     else:
-                        post_failure_message("baseload", f"Failed to call {f_r} times")
+                        context["last_result"] = "failure"
+                        post_failure_message(discord_manager, "baseload", f"Failed to call {f_r} times")
                 except Exception as ex:
-                    post_failure_message("baseload", f"Other exception when calling burst call {target_url}\n{ex}")
+                    context["last_result"] = "error"
+                    context["last_err"] = ex
+                    context["last_err_time"] = datetime.now()
+                    post_failure_message(discord_manager, "baseload",
+                                         f"Other exception when calling burst call {target_url}\n{ex}")
+                context["last_call"] = datetime.now()
             else:
                 raise Exception(f"Unknown work mode {args.work_mode}")
         except Exception as ex:
             logger.error(f"Discord manager exception: {ex}")
 
-        time.sleep(10)
+        await asyncio.sleep(args.check_interval)
+
+
+routes = web.RouteTableDef()
+
+
+@routes.get('/')
+async def hello(request):
+    ctx = request.app['context']
+
+    ctx["current"] = {
+        "block_age": int(time.time()) - ctx["block_timestamp"],
+        "call_age": int(time.time()) - int(ctx["last_call"].timestamp()),
+    }
+    response = aiohttp_jinja2.render_template('status.jinja2',
+                                              request,
+                                              ctx
+                                              )
+    return response
+
+
+async def main():
+    args = parser.parse_args()
+
+    if args.no_discord:
+        webhook_url = None
+    else:
+        webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
+        if not webhook_url:
+            raise Exception("environment variable DISCORD_WEBHOOK_URL is needed to run monitor")
+
+    logger.info("Starting rpc monitor...")
+    logger.debug(json.dumps(args.__dict__, indent=4))
+
+    if args.no_discord:
+        discord_manager = None
+        logger.info("Running without discord messaging...")
+    else:
+        discord_manager = DiscordManager(webhook_url=webhook_url,
+                                         min_resend_error_time=timedelta(seconds=args.error_interval),
+                                         min_resend_success_time=timedelta(seconds=args.success_interval))
+
+        logger.info("Checking discord webhook...")
+        discord_manager.check_webhook()
+
+    app = web.Application()
+    app.add_routes(routes)
+    app['context'] = {
+        'title': args.title,
+    }
+    aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
+    app_task = asyncio.create_task(
+        web._run_app(app, port=8080, handle_signals=False)  # noqa
+    )
+    await main_loop(discord_manager, args, app['context'])
+
 
 if __name__ == '__main__':
-    asyncio.run(amain())
+    asyncio.run(main())

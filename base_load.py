@@ -1,6 +1,9 @@
 import logging
 import time
 import argparse
+
+from aiohttp import web
+
 from env_default import EnvDefault
 
 import batch_rpc_provider
@@ -11,7 +14,14 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-async def burst_call(target_url, token_holder, token_address, number_calls):
+routes = web.RouteTableDef()
+
+@routes.get('/')
+async def hello(request):
+    return web.Response(text="Hello, world")
+
+
+async def burst_call(context, target_url, token_holder, token_address, number_calls):
     number_of_success_req = 0
     number_of_failed_req = 0
     p = BatchRpcProvider(target_url, 20)
@@ -23,6 +33,9 @@ async def burst_call(target_url, token_holder, token_address, number_calls):
         block_ts = int(latest_block["timestamp"], 0)
         current_ts = int(time.time())
         old_s = current_ts - block_ts
+
+        context["block_age"] = old_s
+        context["block_timestamp"] = block_ts
 
         logger.info(f"Latest block is {old_s}s old")
 
