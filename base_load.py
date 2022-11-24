@@ -30,7 +30,7 @@ async def burst_call(context, target_url, token_holder, token_address, number_ca
     try:
         latest_block = await p.get_block_by_number("latest", False)
         block_number = int(latest_block["number"], 0)
-        block_checked = block_number - 1000
+        block_checked = block_number - 10
         block_ts = int(latest_block["timestamp"], 0)
         current_ts = int(time.time())
         old_s = current_ts - block_ts

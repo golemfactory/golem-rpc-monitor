@@ -111,8 +111,6 @@ async def main_loop(discord_manager, args, context):
                 target_url = args.target_url
                 logger.info(f"Checking target url: {target_url}")
                 try:
-                    if random.randint(0, 1) < 1:
-                        target_url = target_url.replace("8", "7")
                     # burst_call returns success_request_count and failure_request_count
                     (s_r, f_r) = await burst_call(context, target_url, args.token_holder, args.token_address,
                                                   args.request_burst)
