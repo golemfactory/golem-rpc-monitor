@@ -9,7 +9,7 @@ RUN pip install requests aiohttp jinja2 aiohttp-jinja2 batch-rpc-provider datacl
 
 # run script + monitor
 COPY *.py ./
-COPY templates ./
+COPY templates ./templates
 COPY README.md .
 
 
