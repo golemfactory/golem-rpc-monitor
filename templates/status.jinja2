@@ -5,14 +5,26 @@
     <title>Status</title>
 </head>
 <body>
+    <style>
+        .success {
+            color: green;
+        }
+        .failure {
+            color: red;
+        }
+        .error {
+            color: red;
+        }
+
+    </style>
     <h2>Current Status {{title}}</h2>
 
     <p>Elapsed since last check: {{current.call_age}}s</p>
-    <p>Last check result: {{last_result}}</p>
-    <p>Last success: {{last_success}}</p>
+    <p>Last check result: <span class="{{last_result}}">{{last_result}}</span></p>
+    <p>Last success: <span class="{{last_result}}"> {{last_success}}</span></p>
     <p>Block age: {{current.block_age}}s</p>
-    <p>Last error time: {{last_err_time}}</p>
-    <p>Last error: {{last_err}}</p>
+    <p>Last error time: <span class="error">{{last_err_time}}</span></p>
+    <p>Last error: <span class="error">{{last_err}}</span></p>
 
 </body>
 </html>

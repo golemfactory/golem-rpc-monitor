@@ -1,4 +1,5 @@
 import logging
+import random
 import time
 import argparse
 
@@ -80,6 +81,7 @@ def baseload_loop(args_sleep_time, target_url, token_holder, token_address, numb
     total_number_of_success_req = 0
     total_number_of_failed_req = 0
     while True:
+
 
         (number_of_success_req, number_of_failed_req) = burst_call(target_url, token_holder, token_address, number_calls)
         total_number_of_success_req += number_of_success_req

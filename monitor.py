@@ -3,6 +3,8 @@ import asyncio
 import json
 import os
 import time
+import random
+
 import requests
 from aiohttp import web
 
@@ -87,6 +89,7 @@ def post_success_message(discord_manager, topic, message):
 async def main_loop(discord_manager, args, context):
     while True:
         try:
+
             endpoint = args.endpoint
             if args.work_mode == "health_check":
                 logger.info(f"Checking endpoint {endpoint}")
@@ -106,8 +109,10 @@ async def main_loop(discord_manager, args, context):
                 target_url = args.target_url
                 logger.info(f"Checking target url: {target_url}")
                 try:
+                    if random.randint(0, 1) < 1:
+                        target_url = target_url.replace("8", "7")
                     # burst_call returns success_request_count and failure_request_count
-                    (s_r, f_r) = await burst_call(context, args.target_url, args.token_holder, args.token_address,
+                    (s_r, f_r) = await burst_call(context, target_url, args.token_holder, args.token_address,
                                                   args.request_burst)
                     if f_r == 0 and s_r > 0:
                         context["last_success"] = datetime.now()
@@ -139,7 +144,7 @@ async def hello(request):
     ctx = request.app['context']
 
     ctx["current"] = {
-        "block_age": int(time.time()) - ctx["block_timestamp"],
+        "block_age": int(time.time()) - ctx["block_timestamp"] if "block_timestamp" in ctx else 0,
         "call_age": int(time.time()) - int(ctx["last_call"].timestamp()),
     }
     response = aiohttp_jinja2.render_template('status.jinja2',
